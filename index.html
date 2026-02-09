@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tilad VP - Task Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 p-4 md:p-8">
+    <div class="max-w-6xl mx-auto">
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Tilad Investments - Command Center</h1>
+            <p class="text-gray-600">Your personal assistant for deal flow, portfolio, and IDD tracking</p>
+        </div>
+
+        <!-- Add Task Section -->
+        <div class="bg-white rounded-lg shadow-sm p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Add New Task</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <input type="text" id="taskTitle" placeholder="Task title" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <select id="taskCategory" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="deal-pipeline">Deal Pipeline</option>
+                    <option value="portfolio">Portfolio Work</option>
+                    <option value="idd">IDD Materials</option>
+                    <option value="strategic">Strategic Thinking</option>
+                    <option value="quick">Quick Captures</option>
+                </select>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <select id="taskPriority" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="high">High Priority</option>
+                    <option value="medium">Medium Priority</option>
+                    <option value="low">Low Priority</option>
+                </select>
+                <input type="date" id="taskDeadline" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <input type="text" id="taskDealName" placeholder="Deal/Company name (optional)" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+            <textarea id="taskNotes" placeholder="Notes or details..." rows="2" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4"></textarea>
+            <button onclick="addTask()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
+                Add Task
+            </button>
+        </div>
+
+        <!-- Filter Tabs -->
+        <div class="flex flex-wrap gap-2 mb-6">
+            <button onclick="filterTasks('all')" id="filter-all" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">All Tasks</button>
+            <button onclick="filterTasks('deal-pipeline')" id="filter-deal-pipeline" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Deal Pipeline</button>
+            <button onclick="filterTasks('portfolio')" id="filter-portfolio" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Portfolio</button>
+            <button onclick="filterTasks('idd')" id="filter-idd" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">IDD Materials</button>
+            <button onclick="filterTasks('strategic')" id="filter-strategic" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Strategic</button>
+            <button onclick="filterTasks('quick')" id="filter-quick" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">Quick Captures</button>
+        </div>
+
+        <!-- Tasks List -->
+        <div id="tasksList" class="space-y-4">
+            <!-- Tasks will be rendered here -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-12 text-gray-400 hidden">
+            <svg class="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            </svg>
+            <p>No tasks yet. Add your first task above!</p>
+        </div>
+    </div>
+
+    <script>
+        let tasks = [];
+        let currentFilter = 'all';
+
+        // Initialize with storage
+        async function initializeStorage() {
+            try {
+                const result = await window.storage.list('task:');
+                if (result && result.keys && result.keys.length > 0) {
+                    tasks = [];
+                    for (const key of result.keys) {
+                        try {
+                            const data = await window.storage.get(key);
+                            if (data && data.value) {
+                                tasks.push(JSON.parse(data.value));
+                            }
+                        } catch (err) {
+                            console.log('Key not found or error:', key);
+                        }
+                    }
+                    tasks.sort((a, b) => new Date(b.created) - new Date(a.created));
+                } else {
+                    // Add initial task if no tasks exist
+                    const initialTask = {
+                        id: Date.now(),
+                        title: 'Review upcoming IC material',
+                        category: 'idd',
+                        priority: 'high',
+                        deadline: '',
+                        dealName: '',
+                        notes: '',
+                        completed: false,
+                        created: new Date().toISOString()
+                    };
+                    tasks.push(initialTask);
+                    await window.storage.set(`task:${initialTask.id}`, JSON.stringify(initialTask));
+                }
+            } catch (error) {
+                console.error('Storage initialization error:', error);
+                // Add initial task on error
+                const initialTask = {
+                    id: Date.now(),
+                    title: 'Review upcoming IC material',
+                    category: 'idd',
+                    priority: 'high',
+                    deadline: '',
+                    dealName: '',
+                    notes: '',
+                    completed: false,
+                    created: new Date().toISOString()
+                };
+                tasks.push(initialTask);
+            }
+            renderTasks();
+        }
+
+        async function addTask() {
+            const title = document.getElementById('taskTitle').value.trim();
+            if (!title) {
+                alert('Please enter a task title');
+                return;
+            }
+
+            const task = {
+                id: Date.now(),
+                title: title,
+                category: document.getElementById('taskCategory').value,
+                priority: document.getElementById('taskPriority').value,
+                deadline: document.getElementById('taskDeadline').value,
+                dealName: document.getElementById('taskDealName').value.trim(),
+                notes: document.getElementById('taskNotes').value.trim(),
+                completed: false,
+                created: new Date().toISOString()
+            };
+
+            tasks.unshift(task);
+            
+            try {
+                await window.storage.set(`task:${task.id}`, JSON.stringify(task));
+            } catch (error) {
+                console.error('Error saving task:', error);
+            }
+
+            // Clear form
+            document.getElementById('taskTitle').value = '';
+            document.getElementById('taskDeadline').value = '';
+            document.getElementById('taskDealName').value = '';
+            document.getElementById('taskNotes').value = '';
+
+            renderTasks();
+        }
+
+        async function toggleTask(id) {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                task.completed = !task.completed;
+                try {
+                    await window.storage.set(`task:${task.id}`, JSON.stringify(task));
+                } catch (error) {
+                    console.error('Error updating task:', error);
+                }
+                renderTasks();
+            }
+        }
+
+        async function deleteTask(id) {
+            if (confirm('Delete this task?')) {
+                tasks = tasks.filter(t => t.id !== id);
+                try {
+                    await window.storage.delete(`task:${id}`);
+                } catch (error) {
+                    console.error('Error deleting task:', error);
+                }
+                renderTasks();
+            }
+        }
+
+        function filterTasks(category) {
+            currentFilter = category;
+            
+            // Update button styles
+            document.querySelectorAll('[id^="filter-"]').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('bg-gray-200', 'text-gray-700');
+            });
+            document.getElementById(`filter-${category}`).classList.remove('bg-gray-200', 'text-gray-700');
+            document.getElementById(`filter-${category}`).classList.add('bg-blue-600', 'text-white');
+            
+            renderTasks();
+        }
+
+        function renderTasks() {
+            const filteredTasks = currentFilter === 'all' 
+                ? tasks 
+                : tasks.filter(t => t.category === currentFilter);
+
+            const tasksList = document.getElementById('tasksList');
+            const emptyState = document.getElementById('emptyState');
+
+            if (filteredTasks.length === 0) {
+                tasksList.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            const categoryLabels = {
+                'deal-pipeline': 'Deal Pipeline',
+                'portfolio': 'Portfolio Work',
+                'idd': 'IDD Materials',
+                'strategic': 'Strategic Thinking',
+                'quick': 'Quick Capture'
+            };
+
+            const priorityColors = {
+                'high': 'bg-red-100 text-red-800 border-red-300',
+                'medium': 'bg-yellow-100 text-yellow-800 border-yellow-300',
+                'low': 'bg-green-100 text-green-800 border-green-300'
+            };
+
+            tasksList.innerHTML = filteredTasks.map(task => `
+                <div class="bg-white rounded-lg shadow-sm p-5 border-l-4 ${task.completed ? 'opacity-60 border-gray-300' : priorityColors[task.priority].split(' ')[2].replace('border-', 'border-l-')}">
+                    <div class="flex items-start gap-4">
+                        <input type="checkbox" ${task.completed ? 'checked' : ''} 
+                            onchange="toggleTask(${task.id})"
+                            class="mt-1 h-5 w-5 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer">
+                        
+                        <div class="flex-1">
+                            <div class="flex items-start justify-between gap-4 mb-2">
+                                <h3 class="text-lg font-semibold ${task.completed ? 'line-through text-gray-500' : 'text-gray-900'}">
+                                    ${task.title}
+                                </h3>
+                                <button onclick="deleteTask(${task.id})" class="text-gray-400 hover:text-red-600 transition">
+                                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            
+                            <div class="flex flex-wrap gap-2 mb-3">
+                                <span class="px-2 py-1 text-xs font-medium rounded ${priorityColors[task.priority]}">
+                                    ${task.priority.toUpperCase()}
+                                </span>
+                                <span class="px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800">
+                                    ${categoryLabels[task.category]}
+                                </span>
+                                ${task.deadline ? `
+                                    <span class="px-2 py-1 text-xs font-medium rounded bg-purple-100 text-purple-800">
+                                        📅 ${new Date(task.deadline).toLocaleDateString()}
+                                    </span>
+                                ` : ''}
+                                ${task.dealName ? `
+                                    <span class="px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-700">
+                                        💼 ${task.dealName}
+                                    </span>
+                                ` : ''}
+                            </div>
+                            
+                            ${task.notes ? `
+                                <p class="text-sm text-gray-600 mt-2">${task.notes}</p>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Initialize on load
+        initializeStorage();
+    </script>
+</body>
+</html>
